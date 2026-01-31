@@ -17,9 +17,9 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.storage=/certificates/acme.json"
       - "--log.level=INFO"
     ports:
-      - "3000:80"
-      - "443:443"
-      - "8080:8080"
+      - "${TRAEFIK_HTTP_PORT:-3000}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
     volumes:
       - ./traefik/acme.json:/certificates/acme.json
       - traefik-certificates:/certificates
