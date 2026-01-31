@@ -67,17 +67,20 @@ export default function WorkspaceClient({ workspace, domain }: WorkspaceClientPr
   const vscodeCheckRef = useRef<NodeJS.Timeout | null>(null);
   const opencodeIframeRef = useRef<HTMLIFrameElement | null>(null);
   
-  // URLs are based on workspace ID, not ports (Traefik routes by hostname)
-  const opencodeBaseUrl = `http://opencode-${workspace.id}.${domain}`;
+  // Determine protocol based on current page (works for both localhost and production)
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+  
+  // URLs use path-based routing: /ws/{workspaceId}/{service}
+  const opencodeBaseUrl = `${protocol}://${domain}/ws/${workspace.id}/opencode`;
   // OpenCode URL - include session ID if we have one persisted
   const opencodeUrl = opencodeSessionId
     ? `${opencodeBaseUrl}/${WORKSPACE_PATH_ENCODED}/session/${opencodeSessionId}`
     : `${opencodeBaseUrl}/${WORKSPACE_PATH_ENCODED}/session`;
   
-  const vscodeUrl = `http://vscode-${workspace.id}.${domain}`;
+  const vscodeUrl = `${protocol}://${domain}/ws/${workspace.id}/vscode`;
   
   // Preview URL for live dev server (port 3000 in container)
-  const previewUrl = `http://preview-${workspace.id}.${domain}`;
+  const previewUrl = `${protocol}://${domain}/ws/${workspace.id}/preview`;
 
   const copyPassword = async () => {
     if (workspace.vscodePassword) {
