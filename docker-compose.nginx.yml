@@ -9,8 +9,8 @@
 
 services:
   traefik:
-    deploy:
-      replicas: 0  # Disable traefik
+    profiles:
+      - disabled  # Prevents traefik from starting
 
   web:
     ports:
