@@ -94,7 +94,7 @@ echo ""
 # Push database schema inside the web container
 # Use the local prisma package (version 5.22.0) to avoid Prisma 7 issues
 echo "📊 Setting up database schema..."
-docker-compose exec -T -e HOME=/home/nextjs web npx --package=prisma@5.22.0 prisma db push --accept-data-loss
+docker-compose exec -T -e HOME=/home/nextjs web npx --package=prisma@5.22.0 prisma db push --accept-data-loss --skip-generate
 echo "✅ Database schema created"
 echo ""
 
