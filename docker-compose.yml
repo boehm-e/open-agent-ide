@@ -92,6 +92,7 @@ services:
       DOMAIN: ${DOMAIN:-localhost}
       WORKSPACE_BASE_PORT: ${WORKSPACE_BASE_PORT:-4000}
       VSCODE_BASE_PORT: ${VSCODE_BASE_PORT:-5000}
+      DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-open-web-agent-2}_web
     ports:
       - "${WEB_PORT:-3000}:3000"
     networks:

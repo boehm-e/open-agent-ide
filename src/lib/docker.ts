@@ -65,7 +65,7 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
   } = config;
 
   const networkName = `workspace-${workspaceId}`;
-  const mainNetwork = 'open-web-agent-2_web';
+  const mainNetwork = process.env.DOCKER_NETWORK || 'open-web-agent-2_web';
   const volumeName = `workspace-${workspaceId}-data`;
   const opencodeDataVolume = `workspace-${workspaceId}-opencode`;
 
