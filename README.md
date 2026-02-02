@@ -65,12 +65,23 @@ cd open-web-agent-2
 
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
 2. Click "New OAuth App"
-3. Fill in the details:
+3. Fill in the details based on your deployment:
+
+   **For Local Development (using lvh.me):**
+   - **Application name**: Open Web Agent (Development)
+   - **Homepage URL**: `http://lvh.me:3000`
+   - **Authorization callback URL**: `http://lvh.me:3000/api/auth/callback/github`
+
+   **For Production (custom domain):**
    - **Application name**: Open Web Agent
-   - **Homepage URL**: `http://localhost:3000` (or your domain)
-   - **Authorization callback URL**: `http://localhost:3000/api/auth/callback/github`
-4. Click "Register application"
-5. Copy the **Client ID** and generate a **Client Secret**
+   - **Homepage URL**: `https://your-domain.com`
+   - **Authorization callback URL**: `https://your-domain.com/api/auth/callback/github`
+
+4. (Optional) Check **Enable Device Flow** for additional auth options
+5. Click "Register application"
+6. Copy the **Client ID** and generate a **Client Secret**
+
+![GitHub OAuth App Configuration](docs/github-oauth-example.png)
 
 ### 3. Configure Environment Variables
 
