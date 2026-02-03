@@ -21,6 +21,7 @@ model User {
   workspaces    Workspace[]
   skills        Skill[]
   llmProviders  LLMProvider[]
+  environments  Environment[]
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime      @default(now())
@@ -69,23 +70,53 @@ model VerificationToken {
 }
 
 model Workspace {
-  id            String    @id @default(cuid())
+  id            String        @id @default(cuid())
   name          String
   userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   githubRepo    String
-  githubBranch  String    @default("main")
+  githubBranch  String        @default("main")
   containerId   String?
   containerUrl  String?
   opencodePort  Int?
   vscodePort    Int?
   vscodePassword String?
-  status        String    @default("pending") // pending, starting, running, stopped, error
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  status        String        @default("pending") // pending, starting, running, stopped, error
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  environments  WorkspaceEnvironment[]
 
   @@index([userId])
   @@map("workspaces")
+}
+
+model Environment {
+  id          String   @id @default(cuid())
+  name        String   // Environment name (e.g., "Production", "Development")
+  description String?  @db.Text
+  variables   String   @db.Text // JSON string of key-value pairs
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaces  WorkspaceEnvironment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@map("environments")
+}
+
+// Many-to-many join table between Workspace and Environment
+model WorkspaceEnvironment {
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  environmentId String
+  environment   Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@id([workspaceId, environmentId])
+  @@index([workspaceId])
+  @@index([environmentId])
+  @@map("workspace_environments")
 }
 
 model Skill {

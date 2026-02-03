@@ -209,34 +209,31 @@ export default function WorkspaceClient({ workspace, domain }: WorkspaceClientPr
   // Fetch persisted OpenCode session ID on mount and poll for new sessions
   useEffect(() => {
     let sessionPollInterval: NodeJS.Timeout | null = null;
+    let isMounted = true;
     
-    const fetchSessionId = async () => {
+    const fetchSessionId = async (): Promise<string | null> => {
       try {
-        // First check if we have a persisted session ID
         const response = await fetch(`/api/workspaces/${workspace.id}/session`);
         const data = await response.json();
-        if (data.sessionId) {
-          setOpencodeSessionId(data.sessionId);
-          // Stop polling if we have a session
-          if (sessionPollInterval) {
-            clearInterval(sessionPollInterval);
-            sessionPollInterval = null;
-          }
-          return true;
-        }
-        return false;
+        console.log('[Session] Fetched persisted session:', data.sessionId);
+        return data.sessionId || null;
       } catch {
-        return false;
+        return null;
       }
     };
     
-    const pollForNewSession = async () => {
+    const pollForNewSession = async (currentSession: string | null) => {
+      if (!isMounted) return;
       try {
-        // Try to get the most recent session from OpenCode API
         const opencodeResponse = await fetch(`/api/workspaces/${workspace.id}/opencode-session`);
         const opencodeData = await opencodeResponse.json();
-        if (opencodeData.sessionId && opencodeData.sessionId !== opencodeSessionId) {
-          setOpencodeSessionId(opencodeData.sessionId);
+        console.log('[Session] Polled opencode session:', opencodeData.sessionId);
+        
+        if (opencodeData.sessionId && opencodeData.sessionId !== currentSession) {
+          console.log('[Session] New session found, updating:', opencodeData.sessionId);
+          if (isMounted) {
+            setOpencodeSessionId(opencodeData.sessionId);
+          }
           // Persist it
           await fetch(`/api/workspaces/${workspace.id}/session`, {
             method: 'POST',
@@ -255,19 +252,27 @@ export default function WorkspaceClient({ workspace, domain }: WorkspaceClientPr
     };
     
     // Initial fetch
-    fetchSessionId().then(hasSession => {
-      // If no persisted session, start polling for new sessions
-      if (!hasSession) {
-        sessionPollInterval = setInterval(pollForNewSession, 3000);
+    fetchSessionId().then(persistedSession => {
+      if (!isMounted) return;
+      
+      if (persistedSession) {
+        setOpencodeSessionId(persistedSession);
+      } else {
+        // No persisted session, start polling for new sessions
+        console.log('[Session] No persisted session, starting poll');
+        sessionPollInterval = setInterval(() => pollForNewSession(null), 3000);
+        // Also poll immediately
+        pollForNewSession(null);
       }
     });
     
     return () => {
+      isMounted = false;
       if (sessionPollInterval) {
         clearInterval(sessionPollInterval);
       }
     };
-  }, [workspace.id, opencodeSessionId]);
+  }, [workspace.id]);
 
   // Check if OpenCode is ready by polling via backend proxy
   useEffect(() => {

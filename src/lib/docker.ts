@@ -52,7 +52,97 @@ export interface WorkspaceContainerConfig {
   githubRepo: string;
   githubBranch?: string;
   githubToken?: string;
+  environmentIds?: string[]; // IDs of environments to link
   // Ports are no longer needed - Traefik routes via Docker network
+}
+
+// Helper function to build environment variables from linked environments
+async function buildEnvironmentVariables(
+  userId: string,
+  environmentIds?: string[]
+): Promise<Record<string, string>> {
+  const envVars: Record<string, string> = {};
+
+  if (!environmentIds || environmentIds.length === 0) {
+    return envVars;
+  }
+
+  // Fetch environments from database
+  const environments = await (prisma as any).environment.findMany({
+    where: {
+      id: { in: environmentIds },
+      userId,
+    },
+  });
+
+  // Merge environment variables (later environments override earlier ones)
+  for (const env of environments) {
+    try {
+      const vars = JSON.parse(env.variables);
+      Object.assign(envVars, vars);
+    } catch (error) {
+      console.error(`Error parsing environment variables for ${env.name}:`, error);
+    }
+  }
+
+  return envVars;
+}
+
+// Sync environment variables to a running workspace container
+export async function syncEnvironmentToWorkspaces(
+  workspaceId: string,
+  environments: { id: string; name: string; variables: string }[]
+): Promise<void> {
+  const opencodeContainer = docker.getContainer(`opencode-${workspaceId}`);
+
+  // Check if container is running
+  const containerInfo = await opencodeContainer.inspect().catch(() => null);
+  if (!containerInfo || !containerInfo.State.Running) {
+    console.log(`Workspace ${workspaceId} is not running, skipping env sync`);
+    return;
+  }
+
+  // Parse and merge environment variables
+  const envVars: Record<string, string> = {};
+  for (const env of environments) {
+    try {
+      const vars = JSON.parse(env.variables);
+      Object.assign(envVars, vars);
+    } catch (error) {
+      console.error(`Error parsing environment variables for ${env.name}:`, error);
+    }
+  }
+
+  console.log(`Syncing environment variables to workspace ${workspaceId}:`, Object.keys(envVars));
+
+  // The only reliable way to update env vars for a running container is to restart it
+  // Docker's container.update() doesn't support Env changes
+  // We need to stop, remove, and recreate the container with new env vars
+  
+  // Write env vars to /etc/profile.d AND restart the container
+  const exportLines = Object.entries(envVars)
+    .map(([key, value]) => `export ${key}="${value.replace(/"/g, '\\"')}"`)
+    .join('\n');
+
+  if (exportLines) {
+    const base64Exports = Buffer.from(exportLines).toString('base64');
+    const writeExec = await opencodeContainer.exec({
+      Cmd: ['sh', '-c', `echo '${base64Exports}' | base64 -d > /etc/profile.d/custom-env.sh && chmod +x /etc/profile.d/custom-env.sh`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    await writeExec.start({});
+  }
+
+  // Restart the container to apply environment from /etc/profile.d
+  // The container's entrypoint runs 'sh -c' which will source /etc/profile.d/*.sh
+  try {
+    await opencodeContainer.restart();
+    console.log(`Environment variables applied to workspace ${workspaceId} - container restarted`);
+  } catch (error) {
+    console.error(`Error restarting container:`, error);
+    throw error;
+  }
 }
 
 export async function createWorkspaceContainer(config: WorkspaceContainerConfig) {
@@ -62,6 +152,7 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
     githubRepo,
     githubBranch = 'main',
     githubToken,
+    environmentIds,
   } = config;
 
   const networkName = `workspace-${workspaceId}`;
@@ -324,6 +415,12 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
       }
     }
 
+    // Add custom environment variables from linked environments
+    const customEnvVars = await buildEnvironmentVariables(userId, environmentIds);
+    for (const [key, value] of Object.entries(customEnvVars)) {
+      opencodeEnv.push(`${key}=${value}`);
+    }
+
     // Create OpenCode container
     // Exposes port 3001 for OpenCode web UI and port 3000 for dev server preview
     const opencodeContainer = await docker.createContainer({
@@ -335,9 +432,11 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
         // Install git, github-cli, nodejs/npm for running dev servers, and sqlite for session queries
         // Git credentials are configured via GITHUB_TOKEN/GH_TOKEN env vars
         // LLM provider API keys are configured via environment variables
+        // Source /etc/profile.d/*.sh to pick up custom environment variables on restart
         `apk add --no-cache git github-cli nodejs npm python3 sqlite` +
         ` && ${opencodeConfigCommand}` +
         (skillsSetupCommands ? ` && ${skillsSetupCommands}` : '') +
+        ` && for f in /etc/profile.d/*.sh; do [ -r "$f" ] && . "$f"; done` +
         ` && cd /workspace && exec opencode web --port 3001 --hostname 0.0.0.0`
       ],
       ExposedPorts: {

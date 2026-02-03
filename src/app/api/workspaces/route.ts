@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, githubRepo, githubBranch = 'main' } = body;
+    const { name, githubRepo, githubBranch = 'main', environmentIds = [] } = body;
 
     if (!name || !githubRepo) {
       return NextResponse.json(
@@ -55,6 +55,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Link environments to workspace if provided
+    if (environmentIds.length > 0) {
+      await prisma.workspaceEnvironment.createMany({
+        data: environmentIds.map((envId: string) => ({
+          workspaceId: workspace.id,
+          environmentId: envId,
+        })),
+      });
+    }
+
     try {
       // Update workspace status to starting
       await prisma.workspace.update({
@@ -70,6 +80,7 @@ export async function POST(request: NextRequest) {
         githubRepo,
         githubBranch,
         githubToken: session.user.githubToken || undefined,
+        environmentIds,
       });
 
 

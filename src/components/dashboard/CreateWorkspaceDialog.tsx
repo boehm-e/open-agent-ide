@@ -13,6 +13,8 @@ import {
   Rocket,
   Bot,
   Sparkles,
+  Variable,
+  Check,
 } from 'lucide-react';
 import type { Workspace } from '@prisma/client';
 import type { GitHubRepository } from '@/lib/github';
@@ -24,6 +26,13 @@ interface CreateWorkspaceDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onWorkspaceCreated: (workspace: Workspace) => void;
+}
+
+interface Environment {
+  id: string;
+  name: string;
+  description: string | null;
+  variables: string;
 }
 
 export default function CreateWorkspaceDialog({
@@ -38,10 +47,14 @@ export default function CreateWorkspaceDialog({
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepository | null>(null);
   const [workspaceName, setWorkspaceName] = useState('');
   const [step, setStep] = useState<'select' | 'configure'>('select');
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [selectedEnvironmentIds, setSelectedEnvironmentIds] = useState<string[]>([]);
+  const [loadingEnvironments, setLoadingEnvironments] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchRepositories();
+      fetchEnvironments();
       setStep('select');
     }
   }, [isOpen]);
@@ -72,6 +85,21 @@ export default function CreateWorkspaceDialog({
     }
   };
 
+  const fetchEnvironments = async () => {
+    setLoadingEnvironments(true);
+    try {
+      const response = await fetch('/api/environments');
+      if (response.ok) {
+        const data = await response.json();
+        setEnvironments(data);
+      }
+    } catch (error) {
+      console.error('Error fetching environments:', error);
+    } finally {
+      setLoadingEnvironments(false);
+    }
+  };
+
   const handleCreateWorkspace = async () => {
     if (!selectedRepo || !workspaceName) {
       return;
@@ -86,6 +114,7 @@ export default function CreateWorkspaceDialog({
           name: workspaceName,
           githubRepo: selectedRepo.clone_url,
           githubBranch: selectedRepo.default_branch,
+          environmentIds: selectedEnvironmentIds,
         }),
       });
 
@@ -106,6 +135,21 @@ export default function CreateWorkspaceDialog({
     setWorkspaceName('');
     setSearchQuery('');
     setStep('select');
+    setSelectedEnvironmentIds([]);
+  };
+
+  const toggleEnvironment = (envId: string) => {
+    setSelectedEnvironmentIds((prev) =>
+      prev.includes(envId) ? prev.filter((id) => id !== envId) : [...prev, envId]
+    );
+  };
+
+  const getVariableCount = (env: Environment) => {
+    try {
+      return Object.keys(JSON.parse(env.variables)).length;
+    } catch {
+      return 0;
+    }
   };
 
   const handleSelectRepo = (repo: GitHubRepository) => {
@@ -301,6 +345,70 @@ export default function CreateWorkspaceDialog({
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   This will be the display name for your workspace
+                </p>
+              </div>
+
+              {/* Environment Selection */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                  <Variable className="w-4 h-4" />
+                  Environments (Optional)
+                </label>
+                {loadingEnvironments ? (
+                  <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading environments...
+                  </div>
+                ) : environments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">
+                    No environments available.{' '}
+                    <a href="/environments" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                      Create one
+                    </a>
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {environments.map((env) => {
+                      const isSelected = selectedEnvironmentIds.includes(env.id);
+                      return (
+                        <div
+                          key={env.id}
+                          onClick={() => toggleEnvironment(env.id)}
+                          className={cn(
+                            'flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all',
+                            isSelected
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'w-4 h-4 rounded border flex items-center justify-center transition-colors',
+                              isSelected
+                                ? 'bg-primary border-primary'
+                                : 'border-border bg-background'
+                            )}
+                          >
+                            {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground">{env.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ({getVariableCount(env)} vars)
+                              </span>
+                            </div>
+                            {env.description && (
+                              <p className="text-xs text-muted-foreground truncate">{env.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Select environments to inject their variables into the workspace container
                 </p>
               </div>
 

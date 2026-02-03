@@ -24,11 +24,14 @@ import {
   ChevronDown,
   Brain,
   Server,
+  Variable,
+  Cog,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
 import type { Workspace } from '@prisma/client';
 import CreateWorkspaceDialog from './CreateWorkspaceDialog';
+import WorkspaceConfigDialog from './WorkspaceConfigDialog';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
@@ -52,6 +55,8 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>(initialWorkspaces);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
@@ -129,6 +134,11 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
     setWorkspaces([workspace, ...workspaces]);
     setIsCreateDialogOpen(false);
     router.push(`/workspace/${workspace.id}`);
+  };
+
+  const handleOpenConfig = (workspace: Workspace) => {
+    setSelectedWorkspace(workspace);
+    setIsConfigDialogOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -240,6 +250,13 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
                           LLM Providers
                         </button>
                         <button
+                          onClick={() => router.push('/environments')}
+                          className="w-full flex items-center gap-2 px-2 py-2 text-sm text-foreground hover:bg-muted rounded-md transition-colors"
+                        >
+                          <Variable className="w-4 h-4 text-primary" />
+                          Environments
+                        </button>
+                        <button
                           onClick={() => signOut({ callbackUrl: '/login' })}
                           className="w-full flex items-center gap-2 px-2 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                         >
@@ -334,6 +351,24 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
                 </div>
                 <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <Server className="w-6 h-6 text-blue-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card 
+            className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20 hover:border-emerald-500/40 cursor-pointer transition-all"
+            onClick={() => router.push('/environments')}
+          >
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-emerald-500">
+                    Environments
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">Manage env variables</p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Variable className="w-6 h-6 text-emerald-500" />
                 </div>
               </div>
             </CardContent>
@@ -469,6 +504,15 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
                       <ExternalLink className="w-4 h-4" />
                       Open
                     </Button>
+                    <Tooltip content="Workspace settings">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleOpenConfig(workspace)}
+                      >
+                        <Cog className="w-4 h-4" />
+                      </Button>
+                    </Tooltip>
                     {workspace.status === 'running' ? (
                       <Tooltip content="Stop workspace">
                         <Button
@@ -557,6 +601,13 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
                       >
                         Open
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => handleOpenConfig(workspace)}
+                      >
+                        <Cog className="w-3.5 h-3.5" />
+                      </Button>
                       {workspace.status === 'running' ? (
                         <Button
                           variant="outline"
@@ -610,6 +661,17 @@ export default function DashboardClient({ user, initialWorkspaces }: DashboardCl
         isOpen={isCreateDialogOpen}
         onClose={() => setIsCreateDialogOpen(false)}
         onWorkspaceCreated={handleWorkspaceCreated}
+      />
+
+      {/* Workspace Config Dialog */}
+      <WorkspaceConfigDialog
+        isOpen={isConfigDialogOpen}
+        onClose={() => {
+          setIsConfigDialogOpen(false);
+          setSelectedWorkspace(null);
+        }}
+        workspaceId={selectedWorkspace?.id || ''}
+        workspaceName={selectedWorkspace?.name || ''}
       />
     </div>
   );
