@@ -22,6 +22,11 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 
+interface GitHubBranch {
+  name: string;
+  protected: boolean;
+}
+
 interface CreateWorkspaceDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +52,9 @@ export default function CreateWorkspaceDialog({
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepository | null>(null);
   const [workspaceName, setWorkspaceName] = useState('');
   const [step, setStep] = useState<'select' | 'configure'>('select');
+  const [branches, setBranches] = useState<GitHubBranch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [loadingBranches, setLoadingBranches] = useState(false);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnvironmentIds, setSelectedEnvironmentIds] = useState<string[]>([]);
   const [loadingEnvironments, setLoadingEnvironments] = useState(false);
@@ -100,8 +108,23 @@ export default function CreateWorkspaceDialog({
     }
   };
 
+  const fetchBranches = async (repo: GitHubRepository) => {
+    setLoadingBranches(true);
+    try {
+      const [owner, repoName] = repo.full_name.split('/');
+      const response = await fetch(`/api/github/branches?owner=${owner}&repo=${repoName}`);
+      const data = await response.json();
+      setBranches(data.branches || []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+      setBranches([]);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
   const handleCreateWorkspace = async () => {
-    if (!selectedRepo || !workspaceName) {
+    if (!selectedRepo || !workspaceName || !selectedBranch) {
       return;
     }
 
@@ -113,7 +136,7 @@ export default function CreateWorkspaceDialog({
         body: JSON.stringify({
           name: workspaceName,
           githubRepo: selectedRepo.clone_url,
-          githubBranch: selectedRepo.default_branch,
+          githubBranch: selectedBranch,
           environmentIds: selectedEnvironmentIds,
         }),
       });
@@ -136,6 +159,8 @@ export default function CreateWorkspaceDialog({
     setSearchQuery('');
     setStep('select');
     setSelectedEnvironmentIds([]);
+    setBranches([]);
+    setSelectedBranch('');
   };
 
   const toggleEnvironment = (envId: string) => {
@@ -155,7 +180,9 @@ export default function CreateWorkspaceDialog({
   const handleSelectRepo = (repo: GitHubRepository) => {
     setSelectedRepo(repo);
     setWorkspaceName(repo.name);
+    setSelectedBranch(repo.default_branch);
     setStep('configure');
+    fetchBranches(repo);
   };
 
   const filteredRepos = repositories.filter((repo) =>
@@ -348,6 +375,36 @@ export default function CreateWorkspaceDialog({
                 </p>
               </div>
 
+              {/* Branch Selection */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                  <GitBranch className="w-4 h-4" />
+                  Branch
+                </label>
+                {loadingBranches ? (
+                  <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading branches...
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className="w-full px-4 py-3 bg-muted/50 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+                  >
+                    {branches.map((branch) => (
+                      <option key={branch.name} value={branch.name}>
+                        {branch.name}
+                        {branch.name === selectedRepo?.default_branch ? ' (default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Select the branch to clone for this workspace
+                </p>
+              </div>
+
               {/* Environment Selection */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
@@ -447,7 +504,7 @@ export default function CreateWorkspaceDialog({
             {step === 'configure' && (
               <Button
                 onClick={handleCreateWorkspace}
-                disabled={!workspaceName || creating}
+                disabled={!workspaceName || !selectedBranch || creating}
                 isLoading={creating}
                 className="gap-2"
               >
