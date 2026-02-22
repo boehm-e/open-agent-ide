@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Open Web Agent',
     short_name: 'OpenWebAgent',
     description: 'Launch containerized development environments with OpenCode and VS Code',
-    start_url: '/dashboard',
+    start_url: '/dashboard?fullscreen=true',
     display: 'fullscreen',
     background_color: '#0a0a0a',
     theme_color: '#6366f1',
