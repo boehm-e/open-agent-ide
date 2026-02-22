@@ -451,6 +451,9 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
           `${opencodeDataVolume}:/root/.local/share/opencode`  // Persist conversation history
         ],
         NetworkMode: networkName,
+        ExtraHosts: [
+          'host.docker.internal:host-gateway'  // Allow containers to reach host services (e.g., databases)
+        ],
         RestartPolicy: {
           Name: 'unless-stopped',
         },
