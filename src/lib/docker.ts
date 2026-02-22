@@ -367,6 +367,7 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
     const codeServerContainer = await docker.createContainer({
       name: `code-server-${workspaceId}`,
       Image: 'codercom/code-server:latest',
+      User: 'root',
       Entrypoint: ['sh', '-c'],
       Cmd: [
         // Create settings directory, write settings, then start code-server
