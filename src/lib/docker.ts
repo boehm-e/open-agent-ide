@@ -307,7 +307,7 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
       Image: gitImage,
       Entrypoint: ['sh', '-c'],
       Cmd: [
-        // Clone repo only - skills are set up in the opencode container
+        // Clone repo - both code-server and opencode run as root so no permission fix needed
         `git clone --branch ${githubBranch} ${repoUrl} /workspace`
       ],
       HostConfig: {
@@ -363,16 +363,16 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
     };
 
     // Create code-server container using codercom/code-server for better settings support
+    // Running as root so both code-server and opencode can install packages and write files
     const codeServerContainer = await docker.createContainer({
       name: `code-server-${workspaceId}`,
       Image: 'codercom/code-server:latest',
-      User: '1000:1000',
       Entrypoint: ['sh', '-c'],
       Cmd: [
         // Create settings directory, write settings, then start code-server
-        `mkdir -p /home/coder/.local/share/code-server/User && ` +
-        `echo '${JSON.stringify(vscodeSettings)}' > /home/coder/.local/share/code-server/User/settings.json && ` +
-        `exec code-server --bind-addr 0.0.0.0:8443 --auth none /home/coder/workspace`
+        `mkdir -p /root/.local/share/code-server/User && ` +
+        `echo '${JSON.stringify(vscodeSettings)}' > /root/.local/share/code-server/User/settings.json && ` +
+        `exec code-server --bind-addr 0.0.0.0:8443 --auth none /root/workspace`
       ],
       Env: [
         `TZ=UTC`,
@@ -382,7 +382,7 @@ export async function createWorkspaceContainer(config: WorkspaceContainerConfig)
       },
       HostConfig: {
         // No PortBindings - Traefik routes via Docker network, no host ports needed
-        Binds: [`${volumeName}:/home/coder/workspace`],
+        Binds: [`${volumeName}:/root/workspace`],
         NetworkMode: networkName,
         RestartPolicy: {
           Name: 'unless-stopped',
