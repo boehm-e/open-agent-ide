@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   Variable,
   FileKey,
+  ClipboardPaste,
+  X,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -66,6 +68,36 @@ function stringifyVariables(entries: VariableEntry[]): string {
   return JSON.stringify(obj, null, 2);
 }
 
+function parseEnvFile(content: string): VariableEntry[] {
+  const lines = content.split('\n');
+  const entries: VariableEntry[] = [];
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    // Skip empty lines and comments
+    if (!trimmedLine || trimmedLine.startsWith('#')) continue;
+    
+    // Find the first = sign
+    const equalIndex = trimmedLine.indexOf('=');
+    if (equalIndex === -1) continue;
+    
+    const key = trimmedLine.substring(0, equalIndex).trim();
+    let value = trimmedLine.substring(equalIndex + 1).trim();
+    
+    // Remove quotes from value if present
+    if ((value.startsWith('"') && value.endsWith('"')) || 
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    
+    if (key) {
+      entries.push({ key, value });
+    }
+  }
+  
+  return entries;
+}
+
 export default function EnvironmentsClient({ user, initialEnvironments }: EnvironmentsClientProps) {
   const router = useRouter();
   const [environments, setEnvironments] = useState<Environment[]>(initialEnvironments);
@@ -75,6 +107,8 @@ export default function EnvironmentsClient({ user, initialEnvironments }: Enviro
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [variableEntries, setVariableEntries] = useState<VariableEntry[]>([]);
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteContent, setPasteContent] = useState('');
 
   const filteredEnvironments = environments.filter((e) => {
     const query = searchQuery.toLowerCase();
@@ -169,6 +203,18 @@ export default function EnvironmentsClient({ user, initialEnvironments }: Enviro
 
   const removeVariableEntry = (index: number) => {
     setVariableEntries(variableEntries.filter((_, i) => i !== index));
+  };
+
+  const handlePasteEnvFile = () => {
+    const parsedEntries = parseEnvFile(pasteContent);
+    if (parsedEntries.length > 0) {
+      // Merge with existing entries, avoiding duplicates
+      const existingKeys = new Set(variableEntries.map(e => e.key));
+      const newEntries = parsedEntries.filter(e => !existingKeys.has(e.key));
+      setVariableEntries([...variableEntries, ...newEntries]);
+      setShowPasteModal(false);
+      setPasteContent('');
+    }
   };
 
   return (
@@ -366,10 +412,16 @@ export default function EnvironmentsClient({ user, initialEnvironments }: Enviro
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-medium text-foreground">Environment Variables</h3>
-                        <Button variant="outline" size="sm" onClick={addVariableEntry} className="gap-1">
-                          <Plus className="w-3 h-3" />
-                          Add Variable
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setShowPasteModal(true)} className="gap-1">
+                            <ClipboardPaste className="w-3 h-3" />
+                            Paste .env
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={addVariableEntry} className="gap-1">
+                            <Plus className="w-3 h-3" />
+                            Add Variable
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         {variableEntries.map((entry, index) => (
@@ -469,6 +521,47 @@ export default function EnvironmentsClient({ user, initialEnvironments }: Enviro
           </div>
         </div>
       </main>
+
+      {/* Paste .env Modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowPasteModal(false)} />
+          <div className="relative bg-card border border-border rounded-lg shadow-lg w-full max-w-lg mx-4 z-10">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-lg font-semibold text-foreground">Paste .env File Content</h3>
+              <button
+                onClick={() => setShowPasteModal(false)}
+                className="p-1 hover:bg-muted rounded-md transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Paste your .env file content below. Variables will be parsed and added to the environment.
+                Lines starting with # are treated as comments.
+              </p>
+              <textarea
+                value={pasteContent}
+                onChange={(e) => setPasteContent(e.target.value)}
+                placeholder={`# Example .env file
+DATABASE_URL=postgresql://localhost:5432/mydb
+API_KEY=your-api-key-here
+SECRET_KEY="value with spaces"`}
+                className="w-full h-64 px-3 py-2 bg-muted/50 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowPasteModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handlePasteEnvFile} disabled={!pasteContent.trim()}>
+                  Import Variables
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
